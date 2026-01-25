@@ -24,9 +24,81 @@ st.set_page_config(
 # LOGO
 # =============================================================================
 
+def render_header():
+    """Render logo header with user stats banner."""
+    st.markdown("""
+    <style>
+        [data-testid="stImage"] > img { background: transparent !important; }
+        .logo-container img { background: transparent !important; }
+    </style>
+    <div class="logo-container"></div>
+    """, unsafe_allow_html=True)
+
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        st.image("logo.png", width=140)
+    with col2:
+        # Show user stats if logged in and has submitted a rule
+        current_user = get_current_user()
+        if current_user and check_user_submitted_rule(current_user):
+            scores_df = calculate_scores()
+            if not scores_df.empty:
+                user_row = scores_df[scores_df["user"] == current_user]
+                if not user_row.empty:
+                    user_score = int(user_row.iloc[0]["score"])
+                    user_rank = int(user_row.index[0]) + 1
+
+                    # Medal for top 3
+                    medal = ""
+                    if user_rank == 1:
+                        medal = " 🥇"
+                    elif user_rank == 2:
+                        medal = " 🥈"
+                    elif user_rank == 3:
+                        medal = " 🥉"
+
+                    # Ordinal suffix
+                    if user_rank == 1:
+                        suffix = "st"
+                    elif user_rank == 2:
+                        suffix = "nd"
+                    elif user_rank == 3:
+                        suffix = "rd"
+                    else:
+                        suffix = "th"
+
+                    st.markdown(f"""
+                    <div style="
+                        background-color: #ffffff;
+                        border: 3px solid #1a1a1a;
+                        padding: 0.75rem;
+                        text-align: right;
+                        box-shadow: 4px 4px 0 #333333;
+                    ">
+                        <span style="color: #1a1a1a; font-size: 1rem; font-weight: 700;">
+                            Hello, {current_user}!{medal}
+                        </span><br>
+                        <span style="color: #FF6B00; font-size: 1.2rem; font-weight: 800;">
+                            {user_score} pts
+                        </span>
+                        <span style="color: #1a1a1a; font-size: 0.9rem;">
+                            | {user_rank}{suffix} Place
+                        </span>
+                    </div>
+                    """, unsafe_allow_html=True)
+
 def render_logo():
-    """Render logo header using logo.png."""
-    st.image("logo.png", use_container_width=True)
+    """Render logo only (for login/intro pages)."""
+    st.markdown("""
+    <style>
+        [data-testid="stImage"] > img { background: transparent !important; }
+        .logo-container img { background: transparent !important; }
+    </style>
+    <div class="logo-container"></div>
+    """, unsafe_allow_html=True)
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        st.image("logo.png", width=140)
 
 # =============================================================================
 # BRUTALIST CSS THEME
@@ -42,6 +114,21 @@ st.markdown("""
         background-color: #d4d4d4 !important;
         color: #1a1a1a !important;
         font-family: 'JetBrains Mono', 'Courier New', monospace !important;
+    }
+
+    /* Responsive layout - 50% on desktop, full on mobile */
+    @media (min-width: 768px) {
+        .block-container {
+            max-width: 50% !important;
+            margin: 0 auto !important;
+        }
+    }
+
+    @media (max-width: 767px) {
+        .block-container {
+            max-width: 100% !important;
+            padding: 1rem !important;
+        }
     }
 
     /* All text - Monospace */
@@ -67,12 +154,6 @@ st.markdown("""
         text-transform: uppercase !important;
         border-left: 6px solid #FF6B00 !important;
         padding-left: 12px !important;
-    }
-
-    /* Mobile-friendly container */
-    .block-container {
-        padding: 1rem 1rem !important;
-        max-width: 100% !important;
     }
 
     /* Buttons - Brutalist blocks */
@@ -131,43 +212,80 @@ st.markdown("""
         border-radius: 0 !important;
     }
 
-    /* Hide keyboard arrow accessibility text in dropdowns */
-    .stSelectbox svg ~ div,
-    [data-baseweb="select"] [aria-hidden="true"],
-    .stSelectbox [data-testid="stMarkdownContainer"] p:empty,
-    div[data-baseweb="popover"] li > div:last-child:empty {
+    /* DROPDOWN FIX: Hide the keyboard_arrow text that appears on the LEFT */
+    .stSelectbox [data-baseweb="select"] [data-baseweb="icon"] {
         display: none !important;
     }
 
-    /* Hide "keyboard_arrow_down" text */
-    .stSelectbox span:has(+ svg),
-    .stSelectbox div[data-baseweb="select"] span[aria-live="polite"] {
-        font-size: 0 !important;
-        visibility: hidden !important;
-    }
-
-    /* Ensure dropdown arrow icon is visible */
+    /* Hide ALL SVGs in selectbox */
     .stSelectbox svg {
-        visibility: visible !important;
-        width: 20px !important;
-        height: 20px !important;
+        display: none !important;
     }
 
-    /* Hide material icon text labels (keyboard_arrow_down/up) */
-    .material-symbols-outlined,
-    span.material-icons,
-    [class*="icon-"]:not(svg) {
+    /* Target the value container - hide any icons inside */
+    .stSelectbox [data-baseweb="select"] > div > div:first-child svg,
+    .stSelectbox [data-baseweb="select"] > div > div:first-child [data-baseweb="icon"] {
+        display: none !important;
+    }
+
+    /* Force the placeholder/value text to cover any background text */
+    .stSelectbox [data-baseweb="select"] > div > div:first-child {
+        position: relative !important;
+        z-index: 2 !important;
+        background: #ffffff !important;
+    }
+
+    /* Hide icon text that appears BEFORE the value */
+    .stSelectbox [data-baseweb="select"] > div::before {
+        display: none !important;
+    }
+
+    /* Target spans that might contain icon text */
+    .stSelectbox [data-baseweb="select"] span[aria-hidden="true"],
+    .stSelectbox [data-baseweb="select"] [role="presentation"] {
+        display: none !important;
         font-size: 0 !important;
     }
 
-    /* Target specific arrow text that appears in selectboxes */
-    .stSelectbox [data-baseweb="select"] > div > div:last-child {
-        font-size: 0 !important;
+    /* Make sure the actual selected value is visible and on top */
+    .stSelectbox [data-baseweb="select"] [data-baseweb="select-value-container"],
+    .stSelectbox [data-baseweb="select"] input {
+        position: relative !important;
+        z-index: 3 !important;
+        background: #ffffff !important;
     }
-    .stSelectbox [data-baseweb="select"] > div > div:last-child svg {
-        font-size: initial !important;
-        width: 18px !important;
-        height: 18px !important;
+
+    /* Hide anything that looks like an icon container on the left */
+    .stSelectbox [data-baseweb="select"] > div > div:first-child > span:first-child:not([title]) {
+        display: none !important;
+    }
+
+    /* Add custom dropdown arrow on right */
+    .stSelectbox [data-baseweb="select"] > div {
+        position: relative !important;
+        padding-right: 35px !important;
+    }
+
+    .stSelectbox [data-baseweb="select"] > div::after {
+        content: "▼" !important;
+        position: absolute !important;
+        right: 10px !important;
+        top: 50% !important;
+        transform: translateY(-50%) !important;
+        font-size: 12px !important;
+        color: #1a1a1a !important;
+        pointer-events: none !important;
+        z-index: 10 !important;
+    }
+
+    /* Logo - transparent background */
+    .stImage, .stImage > img, [data-testid="stImage"], [data-testid="stImage"] img {
+        background: transparent !important;
+        background-color: transparent !important;
+    }
+
+    img {
+        background: transparent !important;
     }
 
     /* Cards - Concrete blocks with offset shadow */
@@ -244,6 +362,28 @@ st.markdown("""
         border: 3px solid #1a1a1a !important;
         border-top: none !important;
         border-radius: 0 !important;
+    }
+
+    /* FIX: Hide keyboard_arrow_down text in expanders */
+    [data-testid="stIconMaterial"] {
+        font-size: 0 !important;
+        width: 20px !important;
+        height: 20px !important;
+        display: inline-block !important;
+        position: relative !important;
+    }
+
+    [data-testid="stIconMaterial"]::after {
+        content: "▶" !important;
+        font-size: 12px !important;
+        position: absolute !important;
+        left: 0 !important;
+        top: 50% !important;
+        transform: translateY(-50%) !important;
+    }
+
+    details[open] [data-testid="stIconMaterial"]::after {
+        content: "▼" !important;
     }
 
     /* Success/Error messages - Bold blocks */
@@ -399,11 +539,57 @@ def update_sheet(worksheet: str, df: pd.DataFrame):
 # USER IDENTIFICATION
 # =============================================================================
 
+# =============================================================================
+# USER AUTHENTICATION
+# =============================================================================
+
+USERS = {
+    "JJ": "Jaywalk",
+    "Henry": "Boleyn",
+    "James": "Bond",
+    "Dom": "Pizza",
+    "Ash": "Tray",
+    "Max": "Maximus",
+    "Gerard": "Duke",
+}
+
+def render_login_page():
+    """Render login page with user dropdown and password."""
+    render_logo()
+    st.markdown("---")
+
+    st.markdown("## Login")
+
+    # User dropdown
+    selected_user = st.selectbox(
+        "Select your name:",
+        options=[""] + list(USERS.keys()),
+        index=0,
+        key="login_user_select"
+    )
+
+    # Password input
+    password = st.text_input(
+        "Password:",
+        type="password",
+        key="login_password"
+    )
+
+    # Login button
+    if st.button("LOGIN", use_container_width=True):
+        if not selected_user:
+            st.error("Please select your name.")
+        elif not password:
+            st.error("Please enter your password.")
+        elif USERS.get(selected_user) == password:
+            st.session_state["authenticated_user"] = selected_user
+            st.rerun()
+        else:
+            st.error("Incorrect password.")
+
 def get_current_user() -> Optional[str]:
-    """Get current user from query params (?id=name)."""
-    params = st.query_params
-    user_id = params.get("id", None)
-    return user_id
+    """Get current user from session state."""
+    return st.session_state.get("authenticated_user", None)
 
 def check_user_submitted_rule(user_id: str) -> bool:
     """Check if user has submitted a Steward's Rule."""
@@ -416,15 +602,60 @@ def check_user_submitted_rule(user_id: str) -> bool:
 # FEATURE: LEGISLATION (Landing Page)
 # =============================================================================
 
-def render_legislation_gate(user_id: str):
-    """Render the Steward's Rule submission gate."""
-    st.markdown("# LEGISLATION")
+def render_intro_page(user_id: str):
+    """Render the intro page explaining activities and scoring."""
+    render_logo()
     st.markdown("---")
+
+    st.markdown(f"## Welcome, {user_id}!")
 
     st.markdown("""
     <div class="card">
-        <h3>Welcome to Dublin 2025</h3>
-        <p>Before entering, you must propose ONE Steward's Rule
+        <h3>🏇 THE LEOPARDSTOWN LEDGER</h3>
+        <p>Place your bets on the races at Leopardstown. Track your wins and losses with fractional odds.</p>
+        <p><strong>Scoring:</strong> Win = +profit (payout - stake) | Loss = -stake</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+    <div class="card">
+        <h3>🍺 DRINK TRACKER</h3>
+        <p>Log your drinks at every pub. Track your Guinness and Jameson consumption.</p>
+        <p><strong>Scoring:</strong> 🍺 Guinness +5 pts | 🥃 Jameson +5 pts | 🥤 Other +0 pts</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+    <div class="card">
+        <h3>⚖️ STEWARD'S INQUIRY</h3>
+        <p>Catch someone breaking a rule? File an inquiry. The group votes on guilt.</p>
+        <p><strong>Scoring:</strong> +5 pts for filing | -20 pts if found guilty</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+    <div class="card">
+        <h3>🏆 LEADERBOARD</h3>
+        <p>All points are tracked live. Submit your Steward's Rule to earn +10 pts and enter the competition.</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("---")
+
+    if st.button("CONTINUE TO RULES", use_container_width=True):
+        st.session_state["seen_intro"] = True
+        st.rerun()
+
+def render_legislation_gate(user_id: str):
+    """Render the Steward's Rule submission gate."""
+    render_logo()
+    st.markdown("---")
+
+    st.markdown("## Your Steward's Rule")
+
+    st.markdown("""
+    <div class="card">
+        <p>Before entering, you must propose <strong>ONE Steward's Rule</strong>
         that all participants must follow during the trip.</p>
         <p><strong>Choose wisely - your rule becomes law.</strong></p>
     </div>
@@ -682,60 +913,163 @@ def render_leopardstown_ledger(user_id: str):
 # =============================================================================
 
 def render_pint_critic(user_id: str):
-    """Render the Guinness rating system."""
-    st.markdown("## PINT CRITIC")
-    st.markdown("*Rate your Guinness experiences*")
+    """Render the drink tracking system."""
+    st.markdown("## DRINK TRACKER")
+    st.markdown("*Log your drinks at each pub*")
     st.markdown("---")
 
     ratings_df = load_sheet_data("Ratings")
 
-    # Submit new rating
-    with st.expander("RATE A PINT", expanded=True):
-        with st.form("new_rating"):
-            pub_name = st.text_input("Pub Name:", placeholder="e.g., The Temple Bar")
+    # Get list of existing pubs
+    existing_pubs = []
+    if not ratings_df.empty and "pub" in ratings_df.columns:
+        existing_pubs = sorted(ratings_df["pub"].unique().tolist())
 
-            rating = st.slider("Guinness Rating:", min_value=1, max_value=10, value=7)
+    # Quick add section - show existing pubs as buttons
+    if existing_pubs:
+        st.markdown("### QUICK ADD")
+        st.markdown("*Tap a pub, then select your drink*")
 
-            # Visual representation
-            rating_display = "🍺" * rating + "⚫" * (10 - rating)
-            st.markdown(f"### {rating_display}")
-            st.markdown(f"**{rating}/10**")
+        # Track selected pub in session state
+        if "selected_pub" not in st.session_state:
+            st.session_state.selected_pub = None
 
-            notes = st.text_input("Tasting Notes (optional):", placeholder="e.g., Perfect dome, creamy")
+        # Display pub buttons in a grid
+        cols = st.columns(2)
+        for i, pub in enumerate(existing_pubs):
+            with cols[i % 2]:
+                if st.button(f"📍 {pub}", key=f"pub_{pub}", use_container_width=True):
+                    st.session_state.selected_pub = pub
 
-            if st.form_submit_button("SUBMIT RATING", use_container_width=True):
-                if pub_name:
-                    rating_data = {
+        # If a pub is selected, show drink options
+        if st.session_state.selected_pub:
+            st.markdown(f"**Adding drink at: {st.session_state.selected_pub}**")
+            drink_cols = st.columns(3)
+            with drink_cols[0]:
+                if st.button("🍺 Guinness", key="quick_guinness", use_container_width=True):
+                    drink_data = {
                         "user_id": user_id,
-                        "pub": pub_name.strip(),
-                        "rating": rating,
-                        "notes": notes.strip() if notes else "",
+                        "pub": st.session_state.selected_pub,
+                        "drink_type": "Guinness",
                         "timestamp": datetime.now().isoformat()
                     }
-                    if append_to_sheet("Ratings", rating_data):
-                        st.success(f"Rating submitted for {pub_name}!")
+                    if append_to_sheet("Ratings", drink_data):
+                        st.session_state.selected_pub = None
+                        st.rerun()
+            with drink_cols[1]:
+                if st.button("🥃 Jameson", key="quick_jameson", use_container_width=True):
+                    drink_data = {
+                        "user_id": user_id,
+                        "pub": st.session_state.selected_pub,
+                        "drink_type": "Jameson",
+                        "timestamp": datetime.now().isoformat()
+                    }
+                    if append_to_sheet("Ratings", drink_data):
+                        st.session_state.selected_pub = None
+                        st.rerun()
+            with drink_cols[2]:
+                if st.button("🥤 Other", key="quick_other", use_container_width=True):
+                    drink_data = {
+                        "user_id": user_id,
+                        "pub": st.session_state.selected_pub,
+                        "drink_type": "Other",
+                        "timestamp": datetime.now().isoformat()
+                    }
+                    if append_to_sheet("Ratings", drink_data):
+                        st.session_state.selected_pub = None
+                        st.rerun()
+
+            if st.button("Cancel", key="cancel_drink"):
+                st.session_state.selected_pub = None
+                st.rerun()
+
+        st.markdown("---")
+
+    # Add new pub section
+    with st.expander("ADD NEW PUB", expanded=not existing_pubs):
+        with st.form("new_pub_drink"):
+            pub_name = st.text_input("Pub Name:", placeholder="e.g., The Temple Bar")
+            drink_type = st.radio("Drink Type:", ["🍺 Guinness", "🥃 Jameson", "🥤 Other"], horizontal=True)
+
+            if st.form_submit_button("ADD DRINK", use_container_width=True):
+                if pub_name:
+                    # Clean up drink type (remove emoji)
+                    clean_drink = drink_type.split(" ", 1)[1] if " " in drink_type else drink_type
+                    drink_data = {
+                        "user_id": user_id,
+                        "pub": pub_name.strip(),
+                        "drink_type": clean_drink,
+                        "timestamp": datetime.now().isoformat()
+                    }
+                    if append_to_sheet("Ratings", drink_data):
+                        st.success(f"Drink added at {pub_name}!")
                         st.rerun()
                 else:
                     st.error("Please enter the pub name.")
 
-    # Display ratings
-    st.markdown("### ALL RATINGS")
+    # Display drink counts by pub
+    st.markdown("### DRINK TALLY")
 
     if ratings_df.empty:
-        st.info("No ratings yet. Time to find a pub!")
+        st.info("No drinks logged yet. Time to find a pub!")
     else:
-        # Group by pub and show average
-        pub_averages = ratings_df.groupby("pub")["rating"].mean().sort_values(ascending=False)
+        # Group by pub and count drinks
+        pub_counts = ratings_df.groupby("pub").size().sort_values(ascending=False)
 
-        for pub, avg in pub_averages.items():
-            pub_ratings = ratings_df[ratings_df["pub"] == pub]
-            count = len(pub_ratings)
+        for pub in pub_counts.index:
+            pub_drinks = ratings_df[ratings_df["pub"] == pub]
+            total = len(pub_drinks)
+
+            # Count by drink type
+            guinness_count = len(pub_drinks[pub_drinks.get("drink_type", pd.Series()) == "Guinness"]) if "drink_type" in pub_drinks.columns else 0
+            jameson_count = len(pub_drinks[pub_drinks.get("drink_type", pd.Series()) == "Jameson"]) if "drink_type" in pub_drinks.columns else 0
+            other_count = len(pub_drinks[pub_drinks.get("drink_type", pd.Series()) == "Other"]) if "drink_type" in pub_drinks.columns else 0
+
+            # For legacy data without drink_type, count as Guinness
+            if "drink_type" not in pub_drinks.columns or pub_drinks["drink_type"].isna().all():
+                guinness_count = total
+
+            drink_breakdown = []
+            if guinness_count > 0:
+                drink_breakdown.append(f"🍺 {guinness_count}")
+            if jameson_count > 0:
+                drink_breakdown.append(f"🥃 {jameson_count}")
+            if other_count > 0:
+                drink_breakdown.append(f"🥤 {other_count}")
+
+            breakdown_str = " | ".join(drink_breakdown) if drink_breakdown else f"🍺 {total}"
+
+            # Build per-person breakdown
+            person_breakdown = []
+            for person in pub_drinks["user_id"].unique():
+                person_drinks = pub_drinks[pub_drinks["user_id"] == person]
+                p_guinness = len(person_drinks[person_drinks.get("drink_type", pd.Series()) == "Guinness"]) if "drink_type" in person_drinks.columns else 0
+                p_jameson = len(person_drinks[person_drinks.get("drink_type", pd.Series()) == "Jameson"]) if "drink_type" in person_drinks.columns else 0
+                p_other = len(person_drinks[person_drinks.get("drink_type", pd.Series()) == "Other"]) if "drink_type" in person_drinks.columns else 0
+                # Handle legacy data
+                if "drink_type" not in person_drinks.columns or person_drinks["drink_type"].isna().all():
+                    p_guinness = len(person_drinks)
+
+                drinks_icons = ""
+                if p_guinness > 0:
+                    drinks_icons += "🍺" * p_guinness
+                if p_jameson > 0:
+                    drinks_icons += "🥃" * p_jameson
+                if p_other > 0:
+                    drinks_icons += "🥤" * p_other
+
+                if drinks_icons:
+                    person_breakdown.append(f"<strong>{person}:</strong> {drinks_icons}")
+
+            person_html = "<br>".join(person_breakdown) if person_breakdown else ""
 
             st.markdown(f"""
             <div class="card">
                 <strong style="font-size: 1.2rem;">{pub}</strong><br>
-                <span style="color: #00994d; font-size: 1.5rem; font-weight: bold;">{avg:.1f}/10</span>
-                <span style="color: #555555;">({count} rating{'s' if count > 1 else ''})</span>
+                <span style="color: #00994d; font-size: 1.3rem; font-weight: bold;">{total} drink{'s' if total != 1 else ''}</span>
+                <span style="color: #555555; font-size: 0.9rem;">({breakdown_str})</span>
+                <hr style="margin: 8px 0; border: none; border-top: 1px dashed #ccc;">
+                <div style="font-size: 0.85rem;">{person_html}</div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -760,18 +1094,93 @@ def calculate_scores() -> pd.DataFrame:
     for user in all_users:
         score = 0
         breakdown = []
+        line_items = []
 
         # Points for submitting a rule (+10)
         if not rules_df.empty and user in rules_df["user_id"].values:
             score += 10
             breakdown.append("Rule: +10")
+            line_items.append({"action": "Steward's Rule submitted", "points": 10, "icon": "📜"})
 
-        # Points for inquiries filed (+5 each)
+        # Points for drinks - Guinness: +5, Jameson: +5, Other: 0
+        if not ratings_df.empty:
+            user_ratings_df = ratings_df[ratings_df["user_id"] == user]
+            if len(user_ratings_df) > 0:
+                drink_points = 0
+                for _, rating in user_ratings_df.iterrows():
+                    pub_name = rating.get("pub", "Unknown Pub")
+                    drink_type = rating.get("drink_type", "Guinness") if "drink_type" in rating.index else "Guinness"
+                    # Handle NaN drink_type
+                    if pd.isna(drink_type):
+                        drink_type = "Guinness"
+                    # Set icon and points based on drink type
+                    if drink_type == "Guinness":
+                        icon = "🍺"
+                        pts = 5
+                    elif drink_type == "Jameson":
+                        icon = "🥃"
+                        pts = 5
+                    else:
+                        icon = "🥤"
+                        pts = 0
+                    score += pts
+                    drink_points += pts
+                    if pts > 0:
+                        line_items.append({"action": f"{pub_name} ({drink_type})", "points": pts, "icon": icon})
+                if drink_points > 0:
+                    breakdown.append(f"Drinks: +{drink_points}")
+
+        # Points for betting (wins/losses) - euro-based, with horse names
+        if not bets_df.empty:
+            user_bets = bets_df[bets_df["user_id"] == user]
+            wins = user_bets[user_bets["result"] == "WIN"]
+            losses = user_bets[user_bets["result"] == "LOSS"]
+
+            # Individual winning bets
+            if len(wins) > 0:
+                total_profit = 0
+                for _, bet in wins.iterrows():
+                    profit = int(bet["payout"] - bet["stake"])
+                    total_profit += profit
+                    race_num = int(bet["race_num"])
+                    horse = bet.get("horse", "Unknown")
+                    line_items.append({
+                        "action": f"Race {race_num}: {horse} (WIN)",
+                        "points": profit,
+                        "icon": "🏇"
+                    })
+                score += total_profit
+                breakdown.append(f"Bet winnings: +{total_profit}")
+
+            # Individual losing bets
+            if len(losses) > 0:
+                total_lost = 0
+                for _, bet in losses.iterrows():
+                    lost = int(bet["stake"])
+                    total_lost += lost
+                    race_num = int(bet["race_num"])
+                    horse = bet.get("horse", "Unknown")
+                    line_items.append({
+                        "action": f"Race {race_num}: {horse} (LOSS)",
+                        "points": -lost,
+                        "icon": "🏇"
+                    })
+                score -= total_lost
+                breakdown.append(f"Bet losses: -{total_lost}")
+
+        # Points for inquiries filed (+5 each) - with accused names
         if not inquiries_df.empty:
-            filed = len(inquiries_df[inquiries_df["reporter"] == user])
-            if filed > 0:
-                score += filed * 5
-                breakdown.append(f"Inquiries filed: +{filed * 5}")
+            filed_inquiries = inquiries_df[inquiries_df["reporter"] == user]
+            if len(filed_inquiries) > 0:
+                for _, inquiry in filed_inquiries.iterrows():
+                    accused = inquiry.get("accused", "Unknown")
+                    score += 5
+                    line_items.append({
+                        "action": f"Filed inquiry vs {accused}",
+                        "points": 5,
+                        "icon": "⚖️"
+                    })
+                breakdown.append(f"Inquiries filed: +{len(filed_inquiries) * 5}")
 
             # Penalty for being found guilty (-20 each)
             guilty_cases = inquiries_df[
@@ -779,50 +1188,32 @@ def calculate_scores() -> pd.DataFrame:
                 (inquiries_df["guilty_votes"] > inquiries_df["innocent_votes"])
             ]
             if len(guilty_cases) > 0:
-                penalty = len(guilty_cases) * 20
-                score -= penalty
-                breakdown.append(f"Guilty verdicts: -{penalty}")
-
-        # Points for betting (wins/losses) - euro-based
-        if not bets_df.empty:
-            user_bets = bets_df[bets_df["user_id"] == user]
-            wins = user_bets[user_bets["result"] == "WIN"]
-            losses = user_bets[user_bets["result"] == "LOSS"]
-
-            # Profit from winning bets (payout - stake)
-            if len(wins) > 0:
-                profit = wins["payout"].sum() - wins["stake"].sum()
-                score += int(profit)
-                breakdown.append(f"Bet winnings: +{int(profit)}")
-
-            # Lose stake from losing bets
-            if len(losses) > 0:
-                lost = losses["stake"].sum()
-                score -= int(lost)
-                breakdown.append(f"Bet losses: -{int(lost)}")
-
-        # Points for Guinness ratings (+2 each)
-        if not ratings_df.empty:
-            user_ratings = len(ratings_df[ratings_df["user_id"] == user])
-            if user_ratings > 0:
-                score += user_ratings * 2
-                breakdown.append(f"Pint ratings: +{user_ratings * 2}")
+                for _, case in guilty_cases.iterrows():
+                    rule = str(case.get("rule_violated", ""))[:30]
+                    score -= 20
+                    line_items.append({
+                        "action": f"Found GUILTY: {rule}...",
+                        "points": -20,
+                        "icon": "🚨"
+                    })
+                breakdown.append(f"Guilty verdicts: -{len(guilty_cases) * 20}")
 
         scores.append({
             "user": user,
             "score": score,
-            "breakdown": " | ".join(breakdown) if breakdown else "No activity"
+            "breakdown": " | ".join(breakdown) if breakdown else "No activity",
+            "line_items": line_items
         })
 
     return pd.DataFrame(scores).sort_values("score", ascending=False).reset_index(drop=True)
 
 def render_leaderboard():
     """Render the live leaderboard."""
+    scores_df = calculate_scores()
+
     st.markdown("## LEADERBOARD")
     st.markdown("*Live standings*")
     st.markdown("---")
-
-    scores_df = calculate_scores()
 
     if scores_df.empty:
         st.info("No scores yet. Get involved!")
@@ -836,7 +1227,9 @@ def render_leaderboard():
         - **Found guilty:** -20 pts
         - **Winning bet:** +profit (payout - stake)
         - **Losing bet:** -stake
-        - **Rate a Guinness:** +2 pts
+        - **🍺 Guinness:** +5 pts
+        - **🥃 Jameson:** +5 pts
+        - **🥤 Other:** +0 pts
         """)
 
     st.markdown("")
@@ -861,9 +1254,39 @@ def render_leaderboard():
         </div>
         """, unsafe_allow_html=True)
 
-        # Show breakdown on expand
+        # Show receipt-style breakdown on expand
         with st.expander(f"Details for {row['user']}", expanded=False):
-            st.caption(row['breakdown'])
+            line_items = row.get("line_items", [])
+            if line_items:
+                # Build receipt HTML - keep on single lines to avoid rendering issues
+                receipt_lines = []
+                for item in line_items:
+                    points = item["points"]
+                    sign = "+" if points >= 0 else ""
+                    color = "#00994d" if points >= 0 else "#cc0000"
+                    receipt_lines.append(
+                        f'<div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px dashed #cccccc;">'
+                        f'<span>{item["icon"]} {item["action"]}</span>'
+                        f'<span style="color: {color}; font-weight: 700;">{sign}{points}</span>'
+                        f'</div>'
+                    )
+
+                lines_html = ''.join(receipt_lines)
+                receipt_html = (
+                    f'<div style="background-color: #fffff8; border: 2px solid #1a1a1a; padding: 1rem; font-family: JetBrains Mono, monospace; font-size: 0.85rem;">'
+                    f'<div style="text-align: center; font-weight: 800; font-size: 1rem; border-bottom: 2px solid #1a1a1a; padding-bottom: 8px; margin-bottom: 8px;">'
+                    f'{row["user"].upper()}\'S SCORECARD'
+                    f'</div>'
+                    f'{lines_html}'
+                    f'<div style="display: flex; justify-content: space-between; padding-top: 8px; margin-top: 8px; border-top: 2px solid #1a1a1a; font-weight: 800; font-size: 1.1rem;">'
+                    f'<span>TOTAL</span>'
+                    f'<span style="color: #FF6B00;">{row["score"]}</span>'
+                    f'</div>'
+                    f'</div>'
+                )
+                st.markdown(receipt_html, unsafe_allow_html=True)
+            else:
+                st.caption("No activity yet.")
 
 # =============================================================================
 # MAIN APP
@@ -871,28 +1294,36 @@ def render_leaderboard():
 
 def main():
     """Main app entry point."""
-    # Get current user from query params
+    # Get current user from session state
     user_id = get_current_user()
 
-    # No user ID provided
+    # Not logged in - show login page
     if not user_id:
-        render_logo()
-        st.markdown("---")
-        st.error("No user ID provided.")
-        st.markdown("Access the app with `?id=yourname` in the URL.")
-        st.markdown("Example: `https://yourapp.streamlit.app?id=james`")
+        render_login_page()
         return
 
-    # Show current user
-    st.markdown(f"**Logged in as:** `{user_id}`")
+    # Check if user has seen intro page
+    if not st.session_state.get("seen_intro", False):
+        render_intro_page(user_id)
+        return
 
     # Check if user has submitted a rule (gate)
     if not check_user_submitted_rule(user_id):
         render_legislation_gate(user_id)
         return
 
+    # Show current user with logout option
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.markdown(f"**Logged in as:** `{user_id}`")
+    with col2:
+        if st.button("Logout", key="logout_btn"):
+            del st.session_state["authenticated_user"]
+            del st.session_state["seen_intro"]
+            st.rerun()
+
     # Main app navigation
-    render_logo()
+    render_header()
 
     # Manual refresh button to avoid rate limits
     if st.button("REFRESH DATA", use_container_width=True):
@@ -904,7 +1335,7 @@ def main():
         "RULES",
         "INQUIRY",
         "BETS",
-        "PINTS",
+        "DRINKS",
         "SCORES"
     ])
 
