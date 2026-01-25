@@ -8,6 +8,8 @@ import pandas as pd
 from datetime import datetime
 from typing import Optional
 from streamlit_gsheets import GSheetsConnection
+import cloudinary
+import cloudinary.uploader
 
 # =============================================================================
 # APP CONFIGURATION
@@ -536,8 +538,38 @@ def update_sheet(worksheet: str, df: pd.DataFrame):
         return False
 
 # =============================================================================
-# USER IDENTIFICATION
+# CLOUDINARY CONFIGURATION
 # =============================================================================
+
+def configure_cloudinary():
+    """Configure Cloudinary with credentials from Streamlit secrets."""
+    try:
+        cloudinary.config(
+            cloud_name=st.secrets["CLOUDINARY_CLOUD_NAME"],
+            api_key=st.secrets["CLOUDINARY_API_KEY"],
+            api_secret=st.secrets["CLOUDINARY_API_SECRET"],
+            secure=True
+        )
+        return True
+    except Exception as e:
+        return False
+
+def upload_image_to_cloudinary(file) -> Optional[str]:
+    """Upload image to Cloudinary and return the URL."""
+    try:
+        configure_cloudinary()
+        result = cloudinary.uploader.upload(
+            file,
+            folder="dublin-trip-2025",
+            transformation=[
+                {"width": 1200, "height": 1200, "crop": "limit"},
+                {"quality": "auto:good"}
+            ]
+        )
+        return result.get("secure_url")
+    except Exception as e:
+        st.error(f"Upload failed: {e}")
+        return None
 
 # =============================================================================
 # USER AUTHENTICATION
@@ -1415,6 +1447,82 @@ def render_mvp_vote(user_id: str):
 
 
 # =============================================================================
+# FEATURE: PHOTO WALL
+# =============================================================================
+
+def render_photo_wall(user_id: str):
+    """Render the photo wall - upload and view trip photos."""
+    st.markdown("## PHOTO WALL")
+    st.markdown("*Capture the memories*")
+    st.markdown("---")
+
+    photos_df = load_sheet_data("Photos")
+
+    # Check if Cloudinary is configured
+    cloudinary_configured = False
+    try:
+        if st.secrets.get("CLOUDINARY_CLOUD_NAME"):
+            cloudinary_configured = True
+    except:
+        pass
+
+    if not cloudinary_configured:
+        st.warning("Photo uploads not configured yet. Ask James to set up Cloudinary!")
+    else:
+        # Upload new photo
+        with st.expander("UPLOAD A PHOTO", expanded=False):
+            uploaded_file = st.file_uploader(
+                "Choose an image",
+                type=["jpg", "jpeg", "png", "heic"],
+                key="photo_upload"
+            )
+
+            caption = st.text_input("Caption (optional):", placeholder="e.g., 'First pint at Temple Bar'")
+
+            if uploaded_file is not None:
+                # Show preview
+                st.image(uploaded_file, caption="Preview", use_container_width=True)
+
+                if st.button("UPLOAD PHOTO", use_container_width=True):
+                    with st.spinner("Uploading..."):
+                        image_url = upload_image_to_cloudinary(uploaded_file)
+
+                        if image_url:
+                            photo_data = {
+                                "uploader": user_id,
+                                "caption": caption.strip() if caption else "",
+                                "image_url": image_url,
+                                "timestamp": datetime.now().isoformat()
+                            }
+                            if append_to_sheet("Photos", photo_data):
+                                st.success("Photo uploaded!")
+                                st.rerun()
+
+    # Display photo gallery
+    st.markdown("### THE GALLERY")
+
+    if photos_df.empty:
+        st.info("No photos yet. Be the first to capture a moment!")
+    else:
+        # Sort by timestamp (newest first)
+        photos_df = photos_df.sort_values("timestamp", ascending=False)
+
+        # Display photos in a grid (2 columns for mobile-friendly)
+        for idx, photo in photos_df.iterrows():
+            st.markdown(f"""
+            <div class="card" style="padding: 0.5rem;">
+                <img src="{photo['image_url']}" style="width: 100%; border: 2px solid #1a1a1a;">
+                <div style="padding: 0.5rem 0;">
+                    <strong>{photo['uploader']}</strong>
+                    {f'<br><span style="color: #555555;">{photo["caption"]}</span>' if photo.get('caption') else ''}
+                    <br><span style="color: #888888; font-size: 0.75rem;">{photo['timestamp'][:10]}</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            st.markdown("")
+
+
+# =============================================================================
 # FEATURE: LEADERBOARD
 # =============================================================================
 
@@ -1784,7 +1892,7 @@ def main():
         st.rerun()
 
     # Tab navigation
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
         "RULES",
         "INQUIRY",
         "BETS",
@@ -1792,6 +1900,7 @@ def main():
         "QUOTES",
         "SIDE BETS",
         "MVP",
+        "PHOTOS",
         "SCORES"
     ])
 
@@ -1827,6 +1936,9 @@ def main():
         render_mvp_vote(user_id)
 
     with tab8:
+        render_photo_wall(user_id)
+
+    with tab9:
         render_leaderboard()
 
 if __name__ == "__main__":
