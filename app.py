@@ -10,6 +10,8 @@ from typing import Optional
 from streamlit_gsheets import GSheetsConnection
 import cloudinary
 import cloudinary.uploader
+import time
+from googleapiclient.errors import HttpError
 
 # =============================================================================
 # APP CONFIGURATION
@@ -496,11 +498,37 @@ st.markdown("""
 # Google Sheet URL
 GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1uWn3rXrcuoz2mWIGc1N93WUtHhuoHE5oDSg6NJBscH0/edit"
 
+def retry_with_backoff(max_retries=5, initial_delay=1):
+    """
+    Decorator to retry a function with exponential backoff for API rate limits.
+    """
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            delay = initial_delay
+            for i in range(max_retries):
+                try:
+                    return func(*args, **kwargs)
+                except HttpError as e:
+                    if e.resp.status == 429:  # Quota exceeded
+                        st.warning(f"Rate limit exceeded. Retrying in {delay} seconds... (Attempt {i+1}/{max_retries})")
+                        time.sleep(delay)
+                        delay *= 2  # Exponential backoff
+                        if i == max_retries - 1:
+                            st.error("Max retries reached. Please try again later.")
+                            raise
+                    else:
+                        raise
+                except Exception as e:
+                    raise
+        return wrapper
+    return decorator
+
 @st.cache_resource
 def get_gsheets_connection():
     """Initialize Google Sheets connection."""
     return st.connection("gsheets", type=GSheetsConnection)
 
+@retry_with_backoff()
 def load_sheet_data(worksheet: str, ttl: int = 60) -> pd.DataFrame:
     """Load data from a specific worksheet with caching."""
     try:
@@ -510,6 +538,7 @@ def load_sheet_data(worksheet: str, ttl: int = 60) -> pd.DataFrame:
         st.error(f"Error loading {worksheet}: {e}")
         return pd.DataFrame()
 
+@retry_with_backoff()
 def append_to_sheet(worksheet: str, data: dict):
     """Append a row to a specific worksheet."""
     try:
@@ -526,6 +555,7 @@ def append_to_sheet(worksheet: str, data: dict):
         st.error(f"Error saving to {worksheet}: {e}")
         return False
 
+@retry_with_backoff()
 def update_sheet(worksheet: str, df: pd.DataFrame):
     """Update entire worksheet with dataframe."""
     try:
