@@ -543,49 +543,24 @@ def update_sheet(worksheet: str, df: pd.DataFrame):
 # USER AUTHENTICATION
 # =============================================================================
 
-USERS = {
-    "JJ": "Jaywalk",
-    "Henry": "Boleyn",
-    "James": "Bond",
-    "Dom": "Pizza",
-    "Ash": "Tray",
-    "Max": "Maximus",
-    "Gerard": "Duke",
-}
+USERS = ["JJ", "Henry", "James", "Dom", "Ash", "Max", "Gerard"]
 
 def render_login_page():
-    """Render login page with user dropdown and password."""
+    """Render login page with user buttons."""
     render_logo()
     st.markdown("---")
 
-    st.markdown("## Login")
+    st.markdown("## Who are you?")
+    st.markdown("*Tap your name to enter*")
+    st.markdown("")
 
-    # User dropdown
-    selected_user = st.selectbox(
-        "Select your name:",
-        options=[""] + list(USERS.keys()),
-        index=0,
-        key="login_user_select"
-    )
-
-    # Password input
-    password = st.text_input(
-        "Password:",
-        type="password",
-        key="login_password"
-    )
-
-    # Login button
-    if st.button("LOGIN", use_container_width=True):
-        if not selected_user:
-            st.error("Please select your name.")
-        elif not password:
-            st.error("Please enter your password.")
-        elif USERS.get(selected_user) == password:
-            st.session_state["authenticated_user"] = selected_user
-            st.rerun()
-        else:
-            st.error("Incorrect password.")
+    # Display user buttons in a grid
+    cols = st.columns(2)
+    for i, user in enumerate(USERS):
+        with cols[i % 2]:
+            if st.button(user, key=f"login_{user}", use_container_width=True):
+                st.session_state["authenticated_user"] = user
+                st.rerun()
 
 def get_current_user() -> Optional[str]:
     """Get current user from session state."""
