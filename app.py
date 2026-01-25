@@ -610,6 +610,30 @@ def render_intro_page(user_id: str):
 
     st.markdown("""
     <div class="card">
+        <h3>💬 QUOTE WALL</h3>
+        <p>Log memorable quotes from the trip. Vote for your favorites.</p>
+        <p><strong>Quote of the Trip</strong> gets eternal glory!</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+    <div class="card">
+        <h3>🎲 SIDE BETS</h3>
+        <p>Create prop bets between friends. Someone else can take the other side.</p>
+        <p><strong>Scoring:</strong> Winner +stake pts | Loser -stake pts</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+    <div class="card">
+        <h3>⭐ DAILY MVP</h3>
+        <p>Vote for each day's Most Valuable Player. Can change your vote until end of day.</p>
+        <p><strong>Scoring:</strong> +10 pts for winning daily MVP</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+    <div class="card">
         <h3>🏆 LEADERBOARD</h3>
         <p>All points are tracked live. Submit your Steward's Rule to earn +10 pts and enter the competition.</p>
     </div>
@@ -1049,6 +1073,348 @@ def render_pint_critic(user_id: str):
             """, unsafe_allow_html=True)
 
 # =============================================================================
+# FEATURE: QUOTE WALL
+# =============================================================================
+
+def render_quote_wall(user_id: str):
+    """Render the quote wall - submit and vote on memorable quotes."""
+    st.markdown("## QUOTE WALL")
+    st.markdown("*Immortalize the best lines*")
+    st.markdown("---")
+
+    quotes_df = load_sheet_data("Quotes")
+
+    # Submit new quote
+    with st.expander("ADD A QUOTE", expanded=False):
+        with st.form("new_quote"):
+            speaker = st.selectbox("Who said it:", options=USERS)
+            quote_text = st.text_area(
+                "The quote:",
+                placeholder="e.g., 'I'll just have one more...'",
+                max_chars=300
+            )
+
+            if st.form_submit_button("SUBMIT QUOTE", use_container_width=True):
+                if quote_text and len(quote_text.strip()) > 5:
+                    quote_data = {
+                        "submitter": user_id,
+                        "speaker": speaker,
+                        "quote": quote_text.strip(),
+                        "timestamp": datetime.now().isoformat(),
+                        "votes": 0,
+                        "voters": ""
+                    }
+                    if append_to_sheet("Quotes", quote_data):
+                        st.success("Quote added!")
+                        st.rerun()
+                else:
+                    st.error("Please enter a proper quote (at least 5 characters).")
+
+    # Show Quote of the Trip (most votes)
+    if not quotes_df.empty and quotes_df["votes"].max() > 0:
+        top_quote = quotes_df.loc[quotes_df["votes"].idxmax()]
+        st.markdown("### QUOTE OF THE TRIP")
+        st.markdown(f"""
+        <div class="card" style="border-left: 8px solid #ffd700; background: linear-gradient(90deg, rgba(255,215,0,0.15) 0%, #ffffff 30%);">
+            <span style="font-size: 1.5rem;">"{top_quote['quote']}"</span><br>
+            <span style="color: #555555;">— {top_quote['speaker']}</span><br>
+            <span style="color: #FF6B00; font-weight: bold;">👍 {int(top_quote['votes'])} votes</span>
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown("---")
+
+    # Display all quotes
+    st.markdown("### ALL QUOTES")
+
+    if quotes_df.empty:
+        st.info("No quotes yet. Someone say something memorable!")
+    else:
+        # Sort by votes (descending), then by timestamp (newest first)
+        quotes_df = quotes_df.sort_values(["votes", "timestamp"], ascending=[False, False])
+
+        for idx, quote in quotes_df.iterrows():
+            voters_list = str(quote.get("voters", "")).split(",") if quote.get("voters") else []
+            voters_list = [v for v in voters_list if v]  # Remove empty strings
+            user_voted = user_id in voters_list
+            vote_count = int(quote["votes"]) if pd.notna(quote["votes"]) else 0
+
+            st.markdown(f"""
+            <div class="card">
+                <span style="font-size: 1.2rem;">"{quote['quote']}"</span><br>
+                <span style="color: #555555;">— {quote['speaker']}</span>
+                <span style="color: #888888; font-size: 0.8rem;">(submitted by {quote['submitter']})</span><br>
+                <span style="color: #FF6B00; font-weight: bold;">👍 {vote_count}</span>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # Vote button
+            if not user_voted:
+                if st.button(f"👍 Vote", key=f"vote_quote_{idx}", use_container_width=True):
+                    quotes_df.loc[idx, "votes"] = vote_count + 1
+                    quotes_df.loc[idx, "voters"] = ",".join(voters_list + [user_id])
+                    update_sheet("Quotes", quotes_df)
+                    st.rerun()
+            else:
+                st.caption("You voted for this quote.")
+
+            st.markdown("")
+
+
+# =============================================================================
+# FEATURE: SIDE BETS
+# =============================================================================
+
+def render_side_bets(user_id: str):
+    """Render side bets - prop bets between friends."""
+    st.markdown("## SIDE BETS")
+    st.markdown("*Prop bets for bragging rights*")
+    st.markdown("---")
+
+    sidebets_df = load_sheet_data("SideBets")
+
+    # Create new bet
+    with st.expander("CREATE A BET", expanded=False):
+        with st.form("new_sidebet"):
+            # Select opponent
+            opponents = [u for u in USERS if u != user_id]
+            opponent = st.selectbox("Bet against:", options=opponents)
+
+            description = st.text_area(
+                "The Bet:",
+                placeholder="e.g., 'Dom won't last past midnight'",
+                max_chars=200
+            )
+            stake = st.number_input("Points at Stake:", min_value=5, max_value=100, value=10, step=5)
+
+            if st.form_submit_button("CREATE BET", use_container_width=True):
+                if description and len(description.strip()) > 10:
+                    bet_data = {
+                        "creator": user_id,
+                        "description": description.strip(),
+                        "stake": stake,
+                        "timestamp": datetime.now().isoformat(),
+                        "taker": opponent,
+                        "result": "OPEN",
+                        "settled_by": ""
+                    }
+                    if append_to_sheet("SideBets", bet_data):
+                        st.success(f"Bet created with {opponent}!")
+                        st.rerun()
+                else:
+                    st.error("Please describe the bet (at least 10 characters).")
+
+    # Active bets (pending settlement)
+    st.markdown("### ACTIVE BETS")
+
+    if sidebets_df.empty:
+        st.info("No bets yet. Create one!")
+    else:
+        open_bets = sidebets_df[sidebets_df["result"] == "OPEN"]
+
+        if open_bets.empty:
+            st.info("No active bets right now.")
+        else:
+            for idx, bet in open_bets.iterrows():
+                creator = bet["creator"]
+                taker = bet["taker"]
+                is_creator = creator == user_id
+                is_taker = taker == user_id
+                is_involved = is_creator or is_taker
+
+                st.markdown(f"""
+                <div class="card" style="border-left: 4px solid #cc9900;">
+                    <strong>{creator}</strong> vs <strong>{taker}</strong><br>
+                    <span style="font-size: 1.1rem;">"{bet['description']}"</span><br>
+                    <span style="color: #FF6B00; font-weight: bold;">{int(bet['stake'])} pts</span>
+                </div>
+                """, unsafe_allow_html=True)
+
+                # Settle bet (either party can settle)
+                if is_involved:
+                    st.markdown("**Settle this bet:**")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if st.button(f"{creator} WON", key=f"creator_won_{idx}", use_container_width=True):
+                            sidebets_df.loc[idx, "result"] = "WIN"
+                            sidebets_df.loc[idx, "settled_by"] = user_id
+                            update_sheet("SideBets", sidebets_df)
+                            st.rerun()
+                    with col2:
+                        if st.button(f"{taker} WON", key=f"taker_won_{idx}", use_container_width=True):
+                            sidebets_df.loc[idx, "result"] = "LOSS"
+                            sidebets_df.loc[idx, "settled_by"] = user_id
+                            update_sheet("SideBets", sidebets_df)
+                            st.rerun()
+
+                    # Delete option with confirmation
+                    delete_key = f"delete_confirm_{idx}"
+                    if delete_key not in st.session_state:
+                        st.session_state[delete_key] = False
+
+                    if not st.session_state[delete_key]:
+                        if st.button("🗑️ Delete Bet", key=f"delete_{idx}", use_container_width=True):
+                            st.session_state[delete_key] = True
+                            st.rerun()
+                    else:
+                        st.warning("Are you sure you want to delete this bet?")
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            if st.button("YES, DELETE", key=f"confirm_delete_{idx}", use_container_width=True):
+                                sidebets_df = sidebets_df.drop(idx)
+                                update_sheet("SideBets", sidebets_df)
+                                st.session_state[delete_key] = False
+                                st.rerun()
+                        with col2:
+                            if st.button("CANCEL", key=f"cancel_delete_{idx}", use_container_width=True):
+                                st.session_state[delete_key] = False
+                                st.rerun()
+
+                st.markdown("")
+
+    # Settled bets
+    st.markdown("---")
+    st.markdown("### SETTLED BETS")
+
+    if not sidebets_df.empty:
+        settled_bets = sidebets_df[sidebets_df["result"].isin(["WIN", "LOSS"])]
+
+        if settled_bets.empty:
+            st.info("No settled bets yet.")
+        else:
+            for idx, bet in settled_bets.iterrows():
+                result = bet["result"]
+                creator = bet["creator"]
+                taker = bet["taker"]
+                stake = int(bet["stake"])
+
+                # Determine winner/loser
+                if result == "WIN":
+                    winner = creator
+                    loser = taker
+                else:
+                    winner = taker
+                    loser = creator
+
+                result_color = "#00994d"
+
+                st.markdown(f"""
+                <div class="card" style="border-left: 4px solid {result_color};">
+                    <span style="font-size: 1rem;">"{bet['description']}"</span><br>
+                    <span style="color: #00994d; font-weight: bold;">🏆 {winner} wins {stake} pts from {loser}</span>
+                </div>
+                """, unsafe_allow_html=True)
+
+
+# =============================================================================
+# FEATURE: DAILY MVP
+# =============================================================================
+
+def render_mvp_vote(user_id: str):
+    """Render MVP voting - vote for each day's MVP."""
+    st.markdown("## DAILY MVP")
+    st.markdown("*Vote for today's Most Valuable Player*")
+    st.markdown("---")
+
+    mvp_df = load_sheet_data("MVPVotes")
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    # Current day voting
+    st.markdown("### VOTE FOR TODAY'S MVP")
+
+    # Check if user already voted today
+    user_voted_today = False
+    current_vote = None
+    if not mvp_df.empty:
+        user_today_votes = mvp_df[(mvp_df["voter"] == user_id) & (mvp_df["day"] == today)]
+        if not user_today_votes.empty:
+            user_voted_today = True
+            current_vote = user_today_votes.iloc[-1]["nominee"]
+
+    if user_voted_today:
+        st.info(f"You voted for **{current_vote}** today. You can change your vote below.")
+
+    # Vote buttons (grid of user names)
+    st.markdown("*Tap a name to vote:*")
+    other_users = [u for u in USERS if u != user_id]
+    cols = st.columns(2)
+    for i, nominee in enumerate(other_users):
+        with cols[i % 2]:
+            btn_label = f"⭐ {nominee}" if nominee == current_vote else nominee
+            if st.button(btn_label, key=f"mvp_{nominee}", use_container_width=True):
+                if user_voted_today:
+                    # Update existing vote
+                    for idx, row in mvp_df.iterrows():
+                        if row["voter"] == user_id and row["day"] == today:
+                            mvp_df.loc[idx, "nominee"] = nominee
+                            mvp_df.loc[idx, "timestamp"] = datetime.now().isoformat()
+                    update_sheet("MVPVotes", mvp_df)
+                else:
+                    # New vote
+                    vote_data = {
+                        "voter": user_id,
+                        "nominee": nominee,
+                        "day": today,
+                        "timestamp": datetime.now().isoformat()
+                    }
+                    append_to_sheet("MVPVotes", vote_data)
+                st.rerun()
+
+    # Today's standings
+    st.markdown("---")
+    st.markdown("### TODAY'S STANDINGS")
+
+    if mvp_df.empty:
+        st.info("No votes yet today.")
+    else:
+        today_votes = mvp_df[mvp_df["day"] == today]
+        if today_votes.empty:
+            st.info("No votes yet today.")
+        else:
+            # Count votes per nominee
+            vote_counts = today_votes.groupby("nominee").size().sort_values(ascending=False)
+
+            for nominee, count in vote_counts.items():
+                is_leader = nominee == vote_counts.index[0]
+                leader_style = "border-left: 8px solid #ffd700; background: linear-gradient(90deg, rgba(255,215,0,0.15) 0%, #ffffff 30%);" if is_leader else ""
+
+                st.markdown(f"""
+                <div class="card" style="{leader_style}">
+                    <span style="font-weight: bold; font-size: 1.1rem;">{'⭐ ' if is_leader else ''}{nominee}</span>
+                    <span style="color: #FF6B00; font-weight: bold; float: right;">{count} vote{'s' if count != 1 else ''}</span>
+                </div>
+                """, unsafe_allow_html=True)
+
+    # Past MVP Winners
+    st.markdown("---")
+    st.markdown("### PAST MVP WINNERS")
+
+    if not mvp_df.empty:
+        past_days = [d for d in mvp_df["day"].unique() if d != today]
+        past_days = sorted(past_days, reverse=True)
+
+        if not past_days:
+            st.info("No past winners yet.")
+        else:
+            for day in past_days:
+                day_votes = mvp_df[mvp_df["day"] == day]
+                vote_counts = day_votes.groupby("nominee").size().sort_values(ascending=False)
+
+                if not vote_counts.empty:
+                    winner = vote_counts.index[0]
+                    winner_votes = vote_counts.iloc[0]
+
+                    st.markdown(f"""
+                    <div class="card">
+                        <strong>{day}</strong><br>
+                        <span style="color: #FF6B00; font-weight: bold;">🏆 {winner}</span>
+                        <span style="color: #555555;">({winner_votes} votes)</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+    else:
+        st.info("No past winners yet.")
+
+
+# =============================================================================
 # FEATURE: LEADERBOARD
 # =============================================================================
 
@@ -1058,6 +1424,15 @@ def calculate_scores() -> pd.DataFrame:
     inquiries_df = load_sheet_data("Inquiries")
     bets_df = load_sheet_data("Bets")
     ratings_df = load_sheet_data("Ratings")
+    sidebets_df = load_sheet_data("SideBets")
+    mvp_df = load_sheet_data("MVPVotes")
+    quotes_df = load_sheet_data("Quotes")
+
+    # Determine Quote of the Trip winner (submitter of top-voted quote)
+    quote_of_trip_submitter = None
+    if not quotes_df.empty and quotes_df["votes"].max() > 0:
+        top_quote = quotes_df.loc[quotes_df["votes"].idxmax()]
+        quote_of_trip_submitter = top_quote["submitter"]
 
     # Get all users
     all_users = set()
@@ -1173,6 +1548,105 @@ def calculate_scores() -> pd.DataFrame:
                     })
                 breakdown.append(f"Guilty verdicts: -{len(guilty_cases) * 20}")
 
+        # Points for side bets
+        if not sidebets_df.empty:
+            # Bets user created and won
+            user_created_won = sidebets_df[
+                (sidebets_df["creator"] == user) &
+                (sidebets_df["result"] == "WIN")
+            ]
+            for _, bet in user_created_won.iterrows():
+                stake = int(bet["stake"])
+                desc = str(bet["description"])[:30]
+                score += stake
+                line_items.append({
+                    "action": f"Side bet won: {desc}...",
+                    "points": stake,
+                    "icon": "🎲"
+                })
+
+            # Bets user created and lost
+            user_created_lost = sidebets_df[
+                (sidebets_df["creator"] == user) &
+                (sidebets_df["result"] == "LOSS")
+            ]
+            for _, bet in user_created_lost.iterrows():
+                stake = int(bet["stake"])
+                desc = str(bet["description"])[:30]
+                score -= stake
+                line_items.append({
+                    "action": f"Side bet lost: {desc}...",
+                    "points": -stake,
+                    "icon": "🎲"
+                })
+
+            # Bets user took and won (creator lost = taker won)
+            user_took_won = sidebets_df[
+                (sidebets_df["taker"] == user) &
+                (sidebets_df["result"] == "LOSS")
+            ]
+            for _, bet in user_took_won.iterrows():
+                stake = int(bet["stake"])
+                desc = str(bet["description"])[:30]
+                score += stake
+                line_items.append({
+                    "action": f"Side bet won: {desc}...",
+                    "points": stake,
+                    "icon": "🎲"
+                })
+
+            # Bets user took and lost (creator won = taker lost)
+            user_took_lost = sidebets_df[
+                (sidebets_df["taker"] == user) &
+                (sidebets_df["result"] == "WIN")
+            ]
+            for _, bet in user_took_lost.iterrows():
+                stake = int(bet["stake"])
+                desc = str(bet["description"])[:30]
+                score -= stake
+                line_items.append({
+                    "action": f"Side bet lost: {desc}...",
+                    "points": -stake,
+                    "icon": "🎲"
+                })
+
+            # Tally for breakdown
+            total_sb_won = len(user_created_won) + len(user_took_won)
+            total_sb_lost = len(user_created_lost) + len(user_took_lost)
+            if total_sb_won > 0 or total_sb_lost > 0:
+                breakdown.append(f"Side bets: {total_sb_won}W/{total_sb_lost}L")
+
+        # Points for MVP wins (+25 per day)
+        if not mvp_df.empty:
+            # Get all unique days
+            all_days = mvp_df["day"].unique()
+            mvp_wins = 0
+            for day in all_days:
+                day_votes = mvp_df[mvp_df["day"] == day]
+                vote_counts = day_votes.groupby("nominee").size()
+                if not vote_counts.empty:
+                    winner = vote_counts.idxmax()
+                    if winner == user:
+                        mvp_wins += 1
+                        score += 25
+                        line_items.append({
+                            "action": f"MVP Winner: {day}",
+                            "points": 25,
+                            "icon": "⭐"
+                        })
+            if mvp_wins > 0:
+                breakdown.append(f"MVP wins: +{mvp_wins * 25}")
+
+        # Points for Quote of the Trip (+25)
+        if quote_of_trip_submitter == user:
+            score += 25
+            line_items.append({
+                "action": "Quote of the Trip",
+                "points": 25,
+                "icon": "💬"
+            })
+            breakdown.append("Quote of Trip: +25")
+
         scores.append({
             "user": user,
             "score": score,
@@ -1205,6 +1679,10 @@ def render_leaderboard():
         - **🍺 Guinness:** +5 pts
         - **🥃 Jameson:** +5 pts
         - **🥤 Other:** +0 pts
+        - **Side bet win:** +stake pts
+        - **Side bet loss:** -stake pts
+        - **Daily MVP:** +25 pts
+        - **Quote of the Trip:** +25 pts
         """)
 
     st.markdown("")
@@ -1306,11 +1784,14 @@ def main():
         st.rerun()
 
     # Tab navigation
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
         "RULES",
         "INQUIRY",
         "BETS",
         "DRINKS",
+        "QUOTES",
+        "SIDE BETS",
+        "MVP",
         "SCORES"
     ])
 
@@ -1337,6 +1818,15 @@ def main():
         render_pint_critic(user_id)
 
     with tab5:
+        render_quote_wall(user_id)
+
+    with tab6:
+        render_side_bets(user_id)
+
+    with tab7:
+        render_mvp_vote(user_id)
+
+    with tab8:
         render_leaderboard()
 
 if __name__ == "__main__":
