@@ -1503,7 +1503,7 @@ def render_photo_wall(user_id: str):
     # Display photo gallery
     st.markdown("### THE GALLERY")
 
-    if photos_df.empty:
+    if photos_df.empty or "uploader" not in photos_df.columns:
         st.info("No photos yet. Be the first to capture a moment!")
     else:
         # Sort by timestamp (newest first)
@@ -1511,14 +1511,21 @@ def render_photo_wall(user_id: str):
 
         # Display photos
         for idx, photo in photos_df.iterrows():
-            likers_list = str(photo.get("likers", "")).split(",") if photo.get("likers") else []
-            likers_list = [l for l in likers_list if l]  # Remove empty strings
+            # Safely get likers
+            likers_raw = photo.get("likers", "") if "likers" in photos_df.columns else ""
+            likers_list = str(likers_raw).split(",") if pd.notna(likers_raw) and likers_raw else []
+            likers_list = [l.strip() for l in likers_list if l.strip()]  # Remove empty strings
             user_liked = user_id in likers_list
+
             # Safely convert likes to int
-            try:
-                like_count = int(photo["likes"]) if pd.notna(photo.get("likes")) and str(photo["likes"]).strip() != "" else 0
-            except (ValueError, TypeError):
-                like_count = 0
+            like_count = 0
+            if "likes" in photos_df.columns:
+                try:
+                    likes_val = photo.get("likes", 0)
+                    if pd.notna(likes_val) and str(likes_val).strip() != "":
+                        like_count = int(float(likes_val))
+                except (ValueError, TypeError):
+                    like_count = 0
 
             st.markdown(f"""
             <div class="card" style="padding: 0.5rem;">
