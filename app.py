@@ -1492,7 +1492,9 @@ def render_photo_wall(user_id: str):
                                 "uploader": user_id,
                                 "caption": caption.strip() if caption else "",
                                 "image_url": image_url,
-                                "timestamp": datetime.now().isoformat()
+                                "timestamp": datetime.now().isoformat(),
+                                "likes": 0,
+                                "likers": ""
                             }
                             if append_to_sheet("Photos", photo_data):
                                 st.success("Photo uploaded!")
@@ -1507,8 +1509,13 @@ def render_photo_wall(user_id: str):
         # Sort by timestamp (newest first)
         photos_df = photos_df.sort_values("timestamp", ascending=False)
 
-        # Display photos in a grid (2 columns for mobile-friendly)
+        # Display photos
         for idx, photo in photos_df.iterrows():
+            likers_list = str(photo.get("likers", "")).split(",") if photo.get("likers") else []
+            likers_list = [l for l in likers_list if l]  # Remove empty strings
+            user_liked = user_id in likers_list
+            like_count = int(photo["likes"]) if pd.notna(photo.get("likes")) else 0
+
             st.markdown(f"""
             <div class="card" style="padding: 0.5rem;">
                 <img src="{photo['image_url']}" style="width: 100%; border: 2px solid #1a1a1a;">
@@ -1516,9 +1523,22 @@ def render_photo_wall(user_id: str):
                     <strong>{photo['uploader']}</strong>
                     {f'<br><span style="color: #555555;">{photo["caption"]}</span>' if photo.get('caption') else ''}
                     <br><span style="color: #888888; font-size: 0.75rem;">{photo['timestamp'][:10]}</span>
+                    <br><span style="color: #FF6B00; font-weight: bold;">❤️ {like_count}</span>
                 </div>
             </div>
             """, unsafe_allow_html=True)
+
+            # Like button (can't like own photos)
+            if photo['uploader'] != user_id:
+                if not user_liked:
+                    if st.button(f"❤️ Like", key=f"like_photo_{idx}", use_container_width=True):
+                        photos_df.loc[idx, "likes"] = like_count + 1
+                        photos_df.loc[idx, "likers"] = ",".join(likers_list + [user_id])
+                        update_sheet("Photos", photos_df)
+                        st.rerun()
+                else:
+                    st.caption("You liked this photo.")
+
             st.markdown("")
 
 
@@ -1535,6 +1555,7 @@ def calculate_scores() -> pd.DataFrame:
     sidebets_df = load_sheet_data("SideBets")
     mvp_df = load_sheet_data("MVPVotes")
     quotes_df = load_sheet_data("Quotes")
+    photos_df = load_sheet_data("Photos")
 
     # Determine Quote of the Trip winner (submitter of top-voted quote)
     quote_of_trip_submitter = None
@@ -1755,6 +1776,35 @@ def calculate_scores() -> pd.DataFrame:
             })
             breakdown.append("Quote of Trip: +25")
 
+        # Points for photos (+2 per photo, +1 per like received)
+        if not photos_df.empty:
+            user_photos = photos_df[photos_df["uploader"] == user]
+            if len(user_photos) > 0:
+                photo_count = len(user_photos)
+                photo_points = photo_count * 2
+                score += photo_points
+                line_items.append({
+                    "action": f"Photos uploaded ({photo_count})",
+                    "points": photo_points,
+                    "icon": "📸"
+                })
+
+                # Count likes received
+                total_likes = 0
+                for _, photo in user_photos.iterrows():
+                    likes = int(photo["likes"]) if pd.notna(photo.get("likes")) else 0
+                    total_likes += likes
+
+                if total_likes > 0:
+                    score += total_likes
+                    line_items.append({
+                        "action": f"Photo likes received ({total_likes})",
+                        "points": total_likes,
+                        "icon": "❤️"
+                    })
+
+                breakdown.append(f"Photos: +{photo_points + total_likes}")
+
         scores.append({
             "user": user,
             "score": score,
@@ -1791,6 +1841,8 @@ def render_leaderboard():
         - **Side bet loss:** -stake pts
         - **Daily MVP:** +25 pts
         - **Quote of the Trip:** +25 pts
+        - **📸 Photo uploaded:** +2 pts
+        - **❤️ Photo like received:** +1 pt
         """)
 
     st.markdown("")
