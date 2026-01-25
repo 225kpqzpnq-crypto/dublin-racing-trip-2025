@@ -1514,7 +1514,11 @@ def render_photo_wall(user_id: str):
             likers_list = str(photo.get("likers", "")).split(",") if photo.get("likers") else []
             likers_list = [l for l in likers_list if l]  # Remove empty strings
             user_liked = user_id in likers_list
-            like_count = int(photo["likes"]) if pd.notna(photo.get("likes")) else 0
+            # Safely convert likes to int
+            try:
+                like_count = int(photo["likes"]) if pd.notna(photo.get("likes")) and str(photo["likes"]).strip() != "" else 0
+            except (ValueError, TypeError):
+                like_count = 0
 
             st.markdown(f"""
             <div class="card" style="padding: 0.5rem;">
@@ -1793,7 +1797,10 @@ def calculate_scores() -> pd.DataFrame:
                 total_likes = 0
                 if "likes" in photos_df.columns:
                     for _, photo in user_photos.iterrows():
-                        likes = int(photo["likes"]) if pd.notna(photo.get("likes")) else 0
+                        try:
+                            likes = int(photo["likes"]) if pd.notna(photo.get("likes")) and str(photo["likes"]).strip() != "" else 0
+                        except (ValueError, TypeError):
+                            likes = 0
                         total_likes += likes
 
                 if total_likes > 0:
