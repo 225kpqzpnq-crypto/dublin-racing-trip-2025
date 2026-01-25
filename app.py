@@ -1777,7 +1777,7 @@ def calculate_scores() -> pd.DataFrame:
             breakdown.append("Quote of Trip: +25")
 
         # Points for photos (+2 per photo, +1 per like received)
-        if not photos_df.empty:
+        if not photos_df.empty and "uploader" in photos_df.columns:
             user_photos = photos_df[photos_df["uploader"] == user]
             if len(user_photos) > 0:
                 photo_count = len(user_photos)
@@ -1791,9 +1791,10 @@ def calculate_scores() -> pd.DataFrame:
 
                 # Count likes received
                 total_likes = 0
-                for _, photo in user_photos.iterrows():
-                    likes = int(photo["likes"]) if pd.notna(photo.get("likes")) else 0
-                    total_likes += likes
+                if "likes" in photos_df.columns:
+                    for _, photo in user_photos.iterrows():
+                        likes = int(photo["likes"]) if pd.notna(photo.get("likes")) else 0
+                        total_likes += likes
 
                 if total_likes > 0:
                     score += total_likes
