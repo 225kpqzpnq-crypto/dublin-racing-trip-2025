@@ -25,40 +25,8 @@ st.set_page_config(
 # =============================================================================
 
 def render_logo():
-    """Render brutalist logo header."""
-    st.markdown("""
-    <div style="
-        font-family: 'JetBrains Mono', 'Courier New', monospace;
-        background: #1a1a1a;
-        border: 4px solid #FF6B00;
-        padding: 16px;
-        text-align: center;
-        margin-bottom: 16px;
-    ">
-        <div style="
-            color: #00994d;
-            font-size: 1.8rem;
-            font-weight: 800;
-            letter-spacing: 0.25em;
-            line-height: 1.2;
-        ">DUBLIN</div>
-        <div style="
-            color: #FF6B00;
-            font-size: 0.9rem;
-            letter-spacing: 0.4em;
-            border-top: 2px solid #00994d;
-            border-bottom: 2px solid #00994d;
-            padding: 6px 0;
-            margin: 6px 0;
-        ">RACING TRIP</div>
-        <div style="
-            color: #ffffff;
-            font-size: 1.2rem;
-            font-weight: 700;
-            letter-spacing: 0.3em;
-        ">2025</div>
-    </div>
-    """, unsafe_allow_html=True)
+    """Render logo header using logo.png."""
+    st.image("logo.png", use_container_width=True)
 
 # =============================================================================
 # BRUTALIST CSS THEME
@@ -161,6 +129,45 @@ st.markdown("""
         color: #1a1a1a !important;
         border: 3px solid #1a1a1a !important;
         border-radius: 0 !important;
+    }
+
+    /* Hide keyboard arrow accessibility text in dropdowns */
+    .stSelectbox svg ~ div,
+    [data-baseweb="select"] [aria-hidden="true"],
+    .stSelectbox [data-testid="stMarkdownContainer"] p:empty,
+    div[data-baseweb="popover"] li > div:last-child:empty {
+        display: none !important;
+    }
+
+    /* Hide "keyboard_arrow_down" text */
+    .stSelectbox span:has(+ svg),
+    .stSelectbox div[data-baseweb="select"] span[aria-live="polite"] {
+        font-size: 0 !important;
+        visibility: hidden !important;
+    }
+
+    /* Ensure dropdown arrow icon is visible */
+    .stSelectbox svg {
+        visibility: visible !important;
+        width: 20px !important;
+        height: 20px !important;
+    }
+
+    /* Hide material icon text labels (keyboard_arrow_down/up) */
+    .material-symbols-outlined,
+    span.material-icons,
+    [class*="icon-"]:not(svg) {
+        font-size: 0 !important;
+    }
+
+    /* Target specific arrow text that appears in selectboxes */
+    .stSelectbox [data-baseweb="select"] > div > div:last-child {
+        font-size: 0 !important;
+    }
+    .stSelectbox [data-baseweb="select"] > div > div:last-child svg {
+        font-size: initial !important;
+        width: 18px !important;
+        height: 18px !important;
     }
 
     /* Cards - Concrete blocks with offset shadow */
