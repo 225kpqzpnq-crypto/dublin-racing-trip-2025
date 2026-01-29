@@ -664,9 +664,9 @@ def render_intro_page(user_id: str):
 
     st.markdown("""
     <div class="card">
-        <h3>⚖️ STEWARD'S INQUIRY</h3>
-        <p>Catch someone breaking a rule? File an inquiry. The group votes on guilt.</p>
-        <p><strong>Scoring:</strong> +5 pts for filing | -20 pts if found guilty</p>
+        <h3>💸 FINES SYSTEM</h3>
+        <p>Catch someone breaking a rule? Issue an instant fine. No voting needed.</p>
+        <p><strong>Scoring:</strong> -5 pts per fine received | 0 pts for issuing</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -749,92 +749,90 @@ def render_legislation_gate(user_id: str):
                 st.error("Please enter a proper rule (at least 10 characters).")
 
 # =============================================================================
-# FEATURE: STEWARD'S INQUIRY
+# FEATURE: FINES SYSTEM
 # =============================================================================
 
-def render_stewards_inquiry(user_id: str):
-    """Render the rule-breaker reporting/voting system."""
-    st.markdown("## STEWARD'S INQUIRY")
-    st.markdown("*Report rule violations and vote on penalties*")
+def render_fines_system(user_id: str):
+    """Render the fines system - instant penalties for rule violations."""
+    st.markdown("## FINES SYSTEM")
+    st.markdown("*Issue instant fines for rule violations*")
     st.markdown("---")
 
-    # Load existing rules and inquiries
+    # Load existing rules and fines/inquiries
     rules_df = load_sheet_data("Rules")
     inquiries_df = load_sheet_data("Inquiries")
 
-    # File new inquiry
-    with st.expander("FILE NEW INQUIRY", expanded=False):
-        with st.form("new_inquiry"):
+    # Section A - Issue Fine Form
+    with st.expander("ISSUE A FINE", expanded=False):
+        with st.form("issue_fine"):
             # Get list of users (excluding self)
             users = rules_df["user_id"].unique().tolist() if not rules_df.empty else []
             users = [u for u in users if u != user_id]
 
-            accused = st.selectbox("Accused:", options=users if users else ["No users available"])
+            fined_person = st.selectbox("Person to fine:", options=users if users else ["No users available"])
 
             # Get list of rules
             rule_options = rules_df["rule"].tolist() if not rules_df.empty else []
-            rule_violated = st.selectbox("Rule Violated:", options=rule_options if rule_options else ["No rules yet"])
+            rule_violated = st.selectbox("Rule violated:", options=rule_options if rule_options else ["No rules yet"])
 
-            evidence = st.text_area("Evidence/Description:", max_chars=300)
+            evidence = st.text_area("Evidence/description (required):", max_chars=300, placeholder="Describe what happened...")
 
-            if st.form_submit_button("FILE INQUIRY", use_container_width=True):
-                if accused and rule_violated and evidence:
-                    inquiry_data = {
-                        "reporter": user_id,
-                        "accused": accused,
+            if st.form_submit_button("ISSUE FINE", use_container_width=True):
+                if fined_person and rule_violated and evidence and len(evidence.strip()) > 0:
+                    fine_data = {
+                        "issuer": user_id,
+                        "fined_person": fined_person,
                         "rule_violated": rule_violated,
-                        "evidence": evidence,
-                        "timestamp": datetime.now().isoformat(),
-                        "guilty_votes": 0,
-                        "innocent_votes": 0,
-                        "status": "OPEN",
-                        "voters": ""
+                        "evidence": evidence.strip(),
+                        "timestamp": datetime.now().isoformat()
                     }
-                    if append_to_sheet("Inquiries", inquiry_data):
-                        st.success("Inquiry filed!")
+                    if append_to_sheet("Inquiries", fine_data):
+                        st.success(f"Fine issued to {fined_person}! (-5 pts)")
                         st.rerun()
+                else:
+                    st.error("Please provide evidence/description for the fine.")
 
-    # Display open inquiries
-    st.markdown("### OPEN CASES")
+    # Section B - Rolling List of Fines
+    st.markdown("### RECENT INFRINGEMENTS")
+    st.markdown("*Last 50 fines issued*")
 
-    if inquiries_df.empty or len(inquiries_df[inquiries_df["status"] == "OPEN"]) == 0:
-        st.info("No open inquiries. Everyone is behaving... for now.")
+    if inquiries_df.empty:
+        st.info("No fines issued yet. Time to enforce the rules!")
     else:
-        open_cases = inquiries_df[inquiries_df["status"] == "OPEN"]
+        # Filter to only new fines format (records with 'fined_person' column)
+        if 'fined_person' in inquiries_df.columns:
+            fines_df = inquiries_df[inquiries_df['fined_person'].notna()].copy()
 
-        for idx, case in open_cases.iterrows():
-            voters_list = str(case.get("voters", "")).split(",") if case.get("voters") else []
-            user_voted = user_id in voters_list
-
-            st.markdown(f"""
-            <div class="card">
-                <strong>ACCUSED:</strong> {case['accused']}<br>
-                <strong>VIOLATION:</strong> {case['rule_violated'][:50]}...<br>
-                <strong>EVIDENCE:</strong> {case['evidence'][:100]}...<br>
-                <strong>VOTES:</strong> Guilty: {case['guilty_votes']} | Innocent: {case['innocent_votes']}
-            </div>
-            """, unsafe_allow_html=True)
-
-            if not user_voted and case['accused'] != user_id:
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button("GUILTY", key=f"guilty_{idx}", use_container_width=True):
-                        inquiries_df.loc[idx, "guilty_votes"] = int(case["guilty_votes"]) + 1
-                        inquiries_df.loc[idx, "voters"] = ",".join(voters_list + [user_id])
-                        update_sheet("Inquiries", inquiries_df)
-                        st.rerun()
-                with col2:
-                    if st.button("INNOCENT", key=f"innocent_{idx}", use_container_width=True):
-                        inquiries_df.loc[idx, "innocent_votes"] = int(case["innocent_votes"]) + 1
-                        inquiries_df.loc[idx, "voters"] = ",".join(voters_list + [user_id])
-                        update_sheet("Inquiries", inquiries_df)
-                        st.rerun()
-            elif user_voted:
-                st.caption("You have voted on this case.")
+            if fines_df.empty:
+                st.info("No fines issued yet. Time to enforce the rules!")
             else:
-                st.caption("You cannot vote on your own case.")
+                # Sort by timestamp descending (newest first) and limit to 50
+                fines_df = fines_df.sort_values('timestamp', ascending=False).head(50)
 
-            st.markdown("---")
+                for idx, fine in fines_df.iterrows():
+                    # Determine border color based on whether current user is fined
+                    border_color = "#cc0000" if fine['fined_person'] == user_id else "#FF6B00"
+
+                    # Truncate text
+                    rule_text = fine['rule_violated'][:60] + "..." if len(fine['rule_violated']) > 60 else fine['rule_violated']
+                    evidence_text = fine['evidence'][:100] + "..." if len(fine['evidence']) > 100 else fine['evidence']
+
+                    # Format timestamp
+                    timestamp_str = fine['timestamp'][:16].replace('T', ' ')  # YYYY-MM-DD HH:MM
+
+                    st.markdown(f"""
+                    <div class="card" style="border-left: 4px solid {border_color};">
+                        <strong>💸 {fine['fined_person']}</strong> fined by <strong>{fine['issuer']}</strong><br>
+                        <span style="color: #555555; font-size: 0.9rem;">Rule: {rule_text}</span><br>
+                        <span style="color: #666666; font-size: 0.85rem;">Evidence: {evidence_text}</span><br>
+                        <span style="color: #888888; font-size: 0.75rem;">{timestamp_str}</span>
+                        <span style="background-color: #cc0000; color: #ffffff; padding: 2px 8px; margin-left: 10px; font-weight: bold; font-size: 0.8rem;">-5 pts</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                    st.markdown("")
+        else:
+            st.info("No fines issued yet. Time to enforce the rules!")
 
 # =============================================================================
 # FEATURE: LEOPARDSTOWN LEDGER
@@ -1688,35 +1686,56 @@ def calculate_scores() -> pd.DataFrame:
                 score -= total_lost
                 breakdown.append(f"Bet losses: -{total_lost}")
 
-        # Points for inquiries filed (+5 each) - with accused names
+        # Points for fines - New fines format
         if not inquiries_df.empty:
-            filed_inquiries = inquiries_df[inquiries_df["reporter"] == user]
-            if len(filed_inquiries) > 0:
-                for _, inquiry in filed_inquiries.iterrows():
-                    accused = inquiry.get("accused", "Unknown")
-                    score += 5
-                    line_items.append({
-                        "action": f"Filed inquiry vs {accused}",
-                        "points": 5,
-                        "icon": "⚖️"
-                    })
-                breakdown.append(f"Inquiries filed: +{len(filed_inquiries) * 5}")
+            # New fines format (fined_person column exists)
+            if 'fined_person' in inquiries_df.columns:
+                user_fines = inquiries_df[inquiries_df["fined_person"] == user]
+                if len(user_fines) > 0:
+                    for _, fine in user_fines.iterrows():
+                        rule = str(fine.get("rule_violated", ""))[:30]
+                        issuer = fine.get("issuer", "Unknown")
+                        score -= 5
+                        line_items.append({
+                            "action": f"Fined by {issuer}: {rule}...",
+                            "points": -5,
+                            "icon": "💸"
+                        })
+                    breakdown.append(f"Fines received: -{len(user_fines) * 5}")
 
-            # Penalty for being found guilty (-20 each)
-            guilty_cases = inquiries_df[
-                (inquiries_df["accused"] == user) &
-                (inquiries_df["guilty_votes"] > inquiries_df["innocent_votes"])
-            ]
-            if len(guilty_cases) > 0:
-                for _, case in guilty_cases.iterrows():
-                    rule = str(case.get("rule_violated", ""))[:30]
-                    score -= 20
-                    line_items.append({
-                        "action": f"Found GUILTY: {rule}...",
-                        "points": -20,
-                        "icon": "🚨"
-                    })
-                breakdown.append(f"Guilty verdicts: -{len(guilty_cases) * 20}")
+            # Legacy inquiries (backward compatibility) - only count if old format columns exist
+            if 'accused' in inquiries_df.columns:
+                # Old format: Points for inquiries filed (+5 each)
+                filed_inquiries = inquiries_df[inquiries_df.get("reporter", pd.Series()) == user]
+                if len(filed_inquiries) > 0:
+                    for _, inquiry in filed_inquiries.iterrows():
+                        accused = inquiry.get("accused", "Unknown")
+                        if pd.notna(accused):  # Only count if it's old format
+                            score += 5
+                            line_items.append({
+                                "action": f"Filed inquiry vs {accused}",
+                                "points": 5,
+                                "icon": "⚖️"
+                            })
+                    if len(filed_inquiries) > 0:
+                        breakdown.append(f"Inquiries filed: +{len(filed_inquiries) * 5}")
+
+                # Penalty for being found guilty (-20 each) - legacy only
+                if 'guilty_votes' in inquiries_df.columns and 'innocent_votes' in inquiries_df.columns:
+                    guilty_cases = inquiries_df[
+                        (inquiries_df["accused"] == user) &
+                        (inquiries_df["guilty_votes"] > inquiries_df["innocent_votes"])
+                    ]
+                    if len(guilty_cases) > 0:
+                        for _, case in guilty_cases.iterrows():
+                            rule = str(case.get("rule_violated", ""))[:30]
+                            score -= 20
+                            line_items.append({
+                                "action": f"Found GUILTY: {rule}...",
+                                "points": -20,
+                                "icon": "🚨"
+                            })
+                        breakdown.append(f"Guilty verdicts: -{len(guilty_cases) * 20}")
 
         # Points for side bets
         if not sidebets_df.empty:
@@ -1875,8 +1894,7 @@ def render_leaderboard():
     with st.expander("SCORING SYSTEM"):
         st.markdown("""
         - **Submit a rule:** +10 pts
-        - **File an inquiry:** +5 pts
-        - **Found guilty:** -20 pts
+        - **Fine received:** -5 pts per fine
         - **Winning bet:** +profit (payout - stake)
         - **Losing bet:** -stake
         - **🍺 Guinness:** +5 pts
@@ -1991,7 +2009,7 @@ def main():
     # Tab navigation
     tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
         "RULES",
-        "INQUIRY",
+        "FINES",
         "BETS",
         "DRINKS",
         "QUOTES",
@@ -2015,7 +2033,7 @@ def main():
                 """, unsafe_allow_html=True)
 
     with tab2:
-        render_stewards_inquiry(user_id)
+        render_fines_system(user_id)
 
     with tab3:
         render_leopardstown_ledger(user_id)
