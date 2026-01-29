@@ -568,6 +568,36 @@ def update_sheet(worksheet: str, df: pd.DataFrame):
         return False
 
 # =============================================================================
+# ADMIN: CLEAR ALL SHEETS
+# =============================================================================
+
+def clear_all_sheets():
+    """ADMIN ONLY - Clear all data from all sheets while preserving headers."""
+    sheets = ["Rules", "Inquiries", "Bets", "Ratings", "Quotes", "SideBets", "MVPVotes", "Photos"]
+
+    for sheet_name in sheets:
+        try:
+            # Load current sheet to get headers
+            df = load_sheet_data(sheet_name, ttl=0)
+
+            if not df.empty:
+                # Create empty dataframe with same columns
+                empty_df = pd.DataFrame(columns=df.columns)
+
+                # Update sheet with empty data (preserves headers)
+                conn = get_gsheets_connection()
+                conn.update(worksheet=sheet_name, data=empty_df)
+                st.success(f"Cleared {sheet_name}")
+            else:
+                st.info(f"{sheet_name} already empty")
+
+        except Exception as e:
+            st.error(f"Error clearing {sheet_name}: {e}")
+
+    st.cache_data.clear()
+    st.success("All sheets cleared! Users will need to re-submit their rules.")
+
+# =============================================================================
 # CLOUDINARY CONFIGURATION
 # =============================================================================
 
@@ -2000,6 +2030,14 @@ def main():
 
     # Main app navigation
     render_header()
+
+    # ADMIN ONLY: Clear all data button
+    if user_id == "James":
+        st.markdown("---")
+        st.markdown("### ADMIN CONTROLS")
+        if st.button("🚨 CLEAR ALL DATA (ADMIN)", use_container_width=True):
+            clear_all_sheets()
+        st.markdown("---")
 
     # Manual refresh button to avoid rate limits
     if st.button("REFRESH DATA", use_container_width=True):
